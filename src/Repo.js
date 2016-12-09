@@ -3,6 +3,7 @@ const Path = require('path');
 const jsonfile = require('jsonfile');
 const glob = require("glob");
 const Package = require('./Package');
+const Graph = require('./Graph');
 const constants = require('./constants.js');
 const FileUtil = require('./utils/FileUtil.js');
 const cwd = process.cwd();
@@ -71,7 +72,11 @@ class Repo {
             if (this.isRoot) {
                 allPackages = this.packages.slice();
                 let repos = this.allRepos;
-                repos.forEach(repo => allPackages.push(...repo.packages));
+                for (let key in repos) {
+                    const repo = repos[key];
+                    allPackages.push(...repo.packages);
+                }
+
                 this._allPackages = allPackages;
             } else {
                 allPackages = this._allPackages = this.root.allPackages;
@@ -127,7 +132,7 @@ class Repo {
             }
         }
 
-        return Object.keys(allRepos).map(name => allRepos[name]);
+        return allRepos;
     }
 
     /**
@@ -319,6 +324,49 @@ class Repo {
         // node needs Object.values... sad day
         return Object.keys(uses).map(key => uses[key]);
     }
+
+    get _children() {
+        return this.uses;
+    }
+
+    get allUses() {
+        if (!this._allUses) {
+            const graph = new Graph(this);
+            this._allUses = graph.depends;
+        }
+
+        return this._allUses;
+    }
+
+    isAnyDependent(...repos) {
+        for (let repo of repos) {
+
+            if (typeof repo === "string") {
+                repo = this.allRepos[repo];
+            }
+
+            if (this.allUses.includes(repo)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    isDependent(...repos) {
+        for (let repo of repos) {
+            if (typeof repo === "string") {
+                repo = this.allRepos[repo];
+            }
+
+            if (!this.allUses.includes(repo)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 
     /**
      * @property {Package[]} visiblePackages

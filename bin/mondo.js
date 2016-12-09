@@ -3,8 +3,7 @@ const fs = require('fs');
 const Path = require('path');
 
 let cwd = Path.resolve('.');
-let Mondo;
-let mondoIndex;
+let Mondo, mondoIndex;
 
 while (cwd) {
     mondoIndex = Path.resolve(cwd, "node_modules/mondorepo/src/cli.js");
