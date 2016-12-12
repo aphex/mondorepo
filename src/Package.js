@@ -1,4 +1,5 @@
 const Path = require('path');
+const Collection = require('./utils/Collection.js');
 const FileUtil = require('./utils/FileUtil.js');
 const Graph = require('./Graph');
 
@@ -42,15 +43,19 @@ class Package {
         if (!mondoDependencies) {
             const deps =  this._mondo.dependencies || {};
             const visiblePackages = this.repo.visiblePackages;
-            mondoDependencies = this._mondoDependencies = Object.keys(deps).map(depName => {
-                const pkg = visiblePackages[depName];
+            mondoDependencies =  new Collection();
+
+            Object.keys(deps).forEach(depName => {
+                const pkg = visiblePackages.get(depName);
 
                 if (!pkg) {
-                    throw new Error(`Package ${depName} was not found`);
+                    throw new Error(`Package ${depName} was not found from package ${this.name}`);
                 }
 
-                return pkg;
+                mondoDependencies.add(pkg);
             });
+
+            this._mondoDependencies = mondoDependencies;
         }
 
         return mondoDependencies;
@@ -79,7 +84,7 @@ class Package {
     isAnyDependent(...pkgs) {
         for (let pkg of pkgs) {
             if (typeof pkg === "string") {
-                pkg = this.repo.visiblePackages[pkg];
+                pkg = this.repo.allPackages.get(pkg);
             }
 
             if (this.allMondoDependencies.includes(pkg)) {
@@ -93,7 +98,7 @@ class Package {
     isDependent(...pkgs) {
         for (let pkg of pkgs) {
             if (typeof pkg === "string") {
-                pkg = this.repo.visiblePackages[pkg];
+                pkg = this.repo.allPackages.get(pkg);
             }
 
             if (!this.allMondoDependencies.includes(pkg)) {

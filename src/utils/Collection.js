@@ -5,9 +5,13 @@ class Collection {
     }
 
     *[Symbol.iterator]() {
-        for(let x of this.items) {
+        for (let x of this.items) {
             yield x;
         }
+    }
+
+    get forEach() {
+        return this.items.forEach.bind(this.items);
     }
 
     get length() {
@@ -19,7 +23,7 @@ class Collection {
             const key = item.name;
 
             if (!this.map[key]) {
-                this.map[key] = this.item.length;
+                this.map[key] = this.items.length;
                 this.items.push(item);
             }
         }
@@ -48,6 +52,14 @@ class Collection {
         return this.items[key] || null;
     }
 
+    getAt(index) {
+        if (index < this.items.length) {
+            return this.items[index];
+        }
+
+        throw new Error(`Index ${index} is out of range ${this.items.length}`);
+    }
+
     remove(item) {
         const key = item.name;
 
@@ -64,7 +76,11 @@ class Collection {
     }
 
     contains(item) {
-        return this.indexOf(item) !== -1;
+        return this.includes(item);
+    }
+
+    includes(item) {
+        return this.items.includes(item);
     }
 
     indexOf(item) {
@@ -85,3 +101,5 @@ class Collection {
         return index;
     }
 }
+
+module.exports = Collection;

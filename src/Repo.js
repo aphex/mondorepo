@@ -3,6 +3,7 @@ const Path = require('path');
 const jsonfile = require('jsonfile');
 const glob = require("glob");
 const Package = require('./Package');
+const Collection = require('./utils/Collection.js');
 const Graph = require('./Graph');
 const constants = require('./constants.js');
 const FileUtil = require('./utils/FileUtil.js');
@@ -70,11 +71,10 @@ class Repo {
 
         if (!allPackages) {
             if (this.isRoot) {
-                allPackages = this.packages.slice();
+                allPackages = this.packages.clone();
                 let repos = this.allRepos;
-                for (let key in repos) {
-                    const repo = repos[key];
-                    allPackages.push(...repo.packages);
+                for (let repo of repos) {
+                    allPackages.addAll(repo.packages);
                 }
 
                 this._allPackages = allPackages;
@@ -111,13 +111,13 @@ class Repo {
 
         if (!allRepos) {
             if (this.isRoot) {
-                allRepos = {};
+                allRepos = new Collection();
                 let getAllUses = (repo) => {
                     let uses = repo.uses;
                     if (uses && uses.length) {
                         for (let usedRepo of uses) {
-                            if (!allRepos[usedRepo.name]) {
-                                allRepos[usedRepo.name] = usedRepo;
+                            if (!allRepos.get(usedRepo.name)) {
+                                allRepos.add(usedRepo);
                                 getAllUses(usedRepo);
                             }
                         }
@@ -204,7 +204,7 @@ class Repo {
                     directories = [directories];
                 }
 
-                packages = [];
+                packages = new Collection();
                 for (let packageDir of directories) {
                     let npmPackagesPaths;
                     packageDir = Path.resolve(manifestPath, packageDir);
@@ -218,7 +218,7 @@ class Repo {
 
                     for (let npmPackagePath of npmPackagesPaths) {
                         let npmPackage = new Package(npmPackagePath, this);
-                        packages.push(npmPackage);
+                        packages.add(npmPackage);
                     }
                 }
 
@@ -304,14 +304,15 @@ class Repo {
 
             if (manifest) {
                 let mondo = this.mondo;
-                uses = {};
+                uses = new Collection();
 
                 if (mondo) {
-                    let manifestUses = mondo.uses || {};
-                    let names = Object.keys(manifestUses);
+                    const manifestUses = mondo.uses || {};
+                    const names = Object.keys(manifestUses);
 
                     names.forEach(name => {
-                        uses[name] = this.resolveRepo(name, manifestUses[name]);
+                        const repo = this.resolveRepo(name, manifestUses[name]);
+                        uses.add(repo);
                     });
 
                     this._uses = uses;
@@ -321,8 +322,7 @@ class Repo {
             }
         }
 
-        // node needs Object.values... sad day
-        return Object.keys(uses).map(key => uses[key]);
+        return uses;
     }
 
     get _children() {
@@ -342,7 +342,7 @@ class Repo {
         for (let repo of repos) {
 
             if (typeof repo === "string") {
-                repo = this.allRepos[repo];
+                repo = this.allRepos.get(repo);
             }
 
             if (this.allUses.includes(repo)) {
@@ -356,7 +356,7 @@ class Repo {
     isDependent(...repos) {
         for (let repo of repos) {
             if (typeof repo === "string") {
-                repo = this.allRepos[repo];
+                repo = this.allRepos.get(repo);
             }
 
             if (!this.allUses.includes(repo)) {
@@ -378,10 +378,10 @@ class Repo {
             let manifest = this.manifest;
 
             if (manifest) {
-                visiblePackages = this.packages.slice();
+                visiblePackages = this.packages.clone();
 
                 this.uses.forEach(repo => {
-                    visiblePackages.push(...repo.packages);
+                    visiblePackages.addAll(repo.packages);
                 });
 
                 this._visiblePackages = visiblePackages;
