@@ -1,6 +1,6 @@
 class Collection {
     constructor() {
-        this.map = {};
+        this.lookup = {};
         this.items = [];
     }
 
@@ -8,6 +8,14 @@ class Collection {
         for (let x of this.items) {
             yield x;
         }
+    }
+
+    get map() {
+        return this.items.map.bind(this.items);
+    }
+
+    get filter() {
+        return this.items.filter.bind(this.items);
     }
 
     get forEach() {
@@ -22,8 +30,8 @@ class Collection {
         for (let item of items) {
             const key = item.name;
 
-            if (!this.map[key]) {
-                this.map[key] = this.items.length;
+            if (!this.lookup[key]) {
+                this.lookup[key] = this.items.length;
                 this.items.push(item);
             }
         }
@@ -46,7 +54,7 @@ class Collection {
 
     get(key) {
         if (typeof key === "string") {
-            key = this.map[key];
+            key = this.lookup[key];
         }
 
         return this.items[key] || null;
@@ -63,14 +71,14 @@ class Collection {
     remove(item) {
         const key = item.name;
 
-        if (this.map[key]) {
-            const index = this.map[key];
+        if (this.lookup[key]) {
+            const index = this.lookup[key];
             this.items.splice(index, 1);
-            delete this.map[key];
+            delete this.lookup[key];
 
             for (let i = index; i < this.items.length; i++) {
                 const it = this.items[i];
-                this.map[it.name] = i;
+                this.lookup[it.name] = i;
             }
         }
     }
@@ -86,9 +94,9 @@ class Collection {
     indexOf(item) {
         let index;
         if (typeof item === "string") {
-            index = this.map[item];
+            index = this.lookup[item];
         } else {
-            index = this.map[item.name];
+            index = this.lookup[item.name];
             if (this.items[index] !== item) {
                 index = -1;
             }

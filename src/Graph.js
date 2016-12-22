@@ -6,6 +6,7 @@ class Graph {
         this._depends = new Collection();
         this._stack = [];
         this._map = {};
+        this._entry = item;
 
         this._descend(item);
     }
@@ -47,7 +48,7 @@ class Graph {
             }
         }
 
-        if (this._repo !== item) {
+        if (this._entry !== item) {
             this._depends.add(item);
         }
 
