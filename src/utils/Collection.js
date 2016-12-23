@@ -14,6 +14,10 @@ class Collection {
         return this.items.map.bind(this.items);
     }
 
+    get reduce() {
+        return this.items.reduce.bind(this.items);
+    }
+
     get filter() {
         return this.items.filter.bind(this.items);
     }

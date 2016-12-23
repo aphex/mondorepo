@@ -3,6 +3,7 @@
 const Path = require('path');
 const {Command} = require('switchit');
 const semver = require('semver');
+const chalk = require('chalk');
 const columnify = require('columnify');
 const JSON5 = require('json5');
 const jsonfile = require('jsonfile');
@@ -178,7 +179,9 @@ class Rev extends Command {
 
     logRev() {
         const log = [];
-        let columns;
+
+        let statusRegExp = /^ (W|E) /g;
+        let columns, statusRegExpResult, colorFunc;
 
         this._revPackages.forEach(revPackage => {
             const pkgLog = {
@@ -187,27 +190,24 @@ class Rev extends Command {
             };
             let details = [];
 
-            if (!this.checkModified) {
-                details.push('assumed changed');
-            } else if (!revPackage.hashMatch) {
-                details.push('content changed');
-            }
-
-            if (revPackage.hasDependencyOnPublishable) {
-                const pkg = revPackage.publishableDependencies[0];
-                const numPkgs = revPackage.publishableDependencies.length;
-                details.push(`dependency change: ${pkg.name}${numPkgs > 1 ? ` and ${numPkgs - 1} other${numPkgs > 2 ? 's' : ''}` : ''}`);
-            }
-
-
             if ((this.checkExisting || this.checkModified) && revPackage.alreadyPublished) {
-                pkgLog.warn = 'W';
+                pkgLog.status = 'W';
                 details = [`${revPackage.version} is already published`];
-            }
-
-            if (revPackage.globalVersionMatch) {
-                pkgLog.warn = 'W';
+            }else if (revPackage.globalVersionMatch) {
+                pkgLog.status = 'W';
                 details = [`${revPackage.version} is current package version`];
+            } else {
+                if (!this.checkModified) {
+                    details.push('assumed changed');
+                } else if (!revPackage.hashMatch) {
+                    details.push('content changed');
+                }
+
+                if (revPackage.hasDependencyOnPublishable) {
+                    const pkg = revPackage.publishableDependencies[0];
+                    const numPkgs = revPackage.publishableDependencies.length;
+                    details.push(`dependency change: ${pkg.name}${numPkgs > 1 ? ` and ${numPkgs - 1} other${numPkgs > 2 ? 's' : ''}` : ''}`);
+                }
             }
 
             pkgLog.details = `(${details.join('; ')})`;
@@ -219,10 +219,22 @@ class Rev extends Command {
             showHeaders: false,
             minWidth: 20,
             config: {
-                warn: {align: 'center', minWidth: 3}
+                status: {align: 'center', minWidth: 3}
             },
-            columns: ['warn', 'name', 'version', 'details']
+            columns: ['status', 'name', 'version', 'details']
         });
+
+        // Color any Warnings or Errors
+        columns = columns.split('\n')
+            .map(row => {
+                statusRegExpResult = statusRegExp.exec(row);
+                if (statusRegExpResult) {
+                    colorFunc = statusRegExpResult[1] === 'W' ? chalk.yellow : chalk.red;
+                    return colorFunc(row);
+                }
+                return row;
+            }).join('\n');
+
         console.log(columns);
     }
 
@@ -257,17 +269,5 @@ Rev.define({
     [preid:string=]
     [version:semver=0.0.0]`
 });
-
-/*
- Publish.define({
- help: {
- '': 'Rev version of packages from the current repo'
- },
- parameters: '[path=]',
- switches: `[dry:boolean=false]
- [check-existing:boolean=true]
- [recursive:boolean=false]
- });
- */
 
 module.exports = Rev;
