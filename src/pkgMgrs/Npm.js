@@ -17,9 +17,13 @@ class Npm extends PackageManager {
                 result += data.toString();
             });
 
+            process.stderr.on('data', function(data) {
+                result += data.toString();
+            });
+
             process.on('close', (code) => {
                 if (code) {
-                    reject(`NPM ${args.join(' ')} exited with code: ${code}`);
+                    reject(new Error(`NPM ${args.join(' ')} exited with code: ${code}:\n${result}`));
                 } else {
                     resolve(result);
                 }
@@ -63,13 +67,7 @@ class Npm extends PackageManager {
     publish(path) {
         const opts = {cwd: path};
         const args = ['publish'];
-
-        return new Promise((resolve) => {
-            console.log(`will run npm ${args.join(' ')} in ${opts.cwd}`);
-            setTimeout(() => resolve('npm publish stdout results here'), 1500);
-        });
-
-        // return this.spawn(args, opts);
+        return this.spawn(args, opts);
     }
 }
 

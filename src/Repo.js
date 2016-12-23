@@ -70,17 +70,13 @@ class Repo {
         let allPackages = this._allPackages;
 
         if (!allPackages) {
-            if (this.isRoot) {
-                allPackages = this.packages.clone();
-                let repos = this.allRepos;
-                for (let repo of repos) {
-                    allPackages.addAll(repo.packages);
-                }
-
-                this._allPackages = allPackages;
-            } else {
-                allPackages = this._allPackages = this.root.allPackages;
+            allPackages = this.packages.clone();
+            let repos = this.uses;
+            for (let repo of repos) {
+                allPackages.addAll(repo.allPackages);
             }
+
+            this._allPackages = allPackages;
         }
 
         return allPackages;
@@ -337,36 +333,6 @@ class Repo {
 
         return this._allUses;
     }
-
-    isAnyDependent(...repos) {
-        for (let repo of repos) {
-
-            if (typeof repo === "string") {
-                repo = this.allRepos.get(repo);
-            }
-
-            if (this.allUses.includes(repo)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    isDependent(...repos) {
-        for (let repo of repos) {
-            if (typeof repo === "string") {
-                repo = this.allRepos.get(repo);
-            }
-
-            if (!this.allUses.includes(repo)) {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
 
     /**
      * @property {Package[]} visiblePackages

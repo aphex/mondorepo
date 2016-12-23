@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const fs = require('fs');
 const Path = require('path');
+const chalk = require('chalk');
 
 let cwd = Path.resolve('.');
 let Mondo, mondoIndex;
@@ -28,7 +29,7 @@ if (!Mondo) {
 const mondo = new Mondo();
 mondo.run().then(function (){},
     function (cause) {
-        console.error(mondo.params.debug ? cause : cause.message);
+        console.error(chalk.red(mondo.params.debug ? cause : cause.message));
         process.exit(1);
     }
 );

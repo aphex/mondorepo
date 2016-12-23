@@ -89,13 +89,9 @@ class Rev extends Command {
         this.dry = dry;
 
         // Get a list of all the this._revPackages we will be reving
-        for (let pkg of repo.packages) {
-            if (recursive) {
-                this._revPackages.addAll(pkg.allMondoDependencies.map(pkg => new RevPackage(pkg)));
-                this._revPackages.add(new RevPackage(pkg));
-            } else {
-                this._revPackages.add(new RevPackage(pkg));
-            }
+
+        for (let pkg of (recursive ? repo.allPackages : repo.packages)) {
+            this._revPackages.add(new RevPackage(pkg));
         }
 
         // Increment or set the version for this package in memory

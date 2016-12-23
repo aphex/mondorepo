@@ -20,7 +20,6 @@ class Package {
         this._package = require(packageFile) || {};
         this._mondo = (this._package && this._package.mondo) || {};
         this._basePath = Path.resolve(this.path, this._mondo.base || '.');
-        this._name = this._package.name;
         if (!this._package.version) {
             throw new Error(`Package '${this._name}' requires a version`);
         }
@@ -29,15 +28,23 @@ class Package {
     }
 
     get name() {
-        return this._name;
+        return this._package.name;
     }
 
     get version() {
         return this._version;
     }
 
+    get private() {
+        return this._package.private === true;
+    }
+
     get path() {
         return this._packagePath;
+    }
+
+    get file() {
+        return this._packageFile;
     }
 
     get base() {
@@ -61,9 +68,9 @@ class Package {
         let mondoDependencies = this._mondoDependencies;
 
         if (!mondoDependencies) {
-            const deps =  this._mondo.dependencies || {};
+            const deps = this._mondo.dependencies || {};
             const visiblePackages = this.repo.visiblePackages;
-            mondoDependencies =  new Collection();
+            mondoDependencies = new Collection();
 
             Object.keys(deps).forEach(depName => {
                 const pkg = visiblePackages.get(depName);
@@ -101,32 +108,18 @@ class Package {
         return this._repo;
     }
 
-    isAnyDependent(...pkgs) {
-        for (let pkg of pkgs) {
-            if (typeof pkg === "string") {
-                pkg = this.repo.allPackages.get(pkg);
-            }
+    publishify() {
+        const pkg = JSON.parse(JSON.stringify(this.package));
 
-            if (this.allMondoDependencies.includes(pkg)) {
-                return true;
-            }
-        }
+        this.mondoDependencies.forEach(p => {
+            pkg.dependencies[p.name] = `^${p.version}`;
+        });
 
-        return false;
-    }
+        pkg.mondo = {
+            hash: pkg.hash
+        };
 
-    isDependent(...pkgs) {
-        for (let pkg of pkgs) {
-            if (typeof pkg === "string") {
-                pkg = this.repo.allPackages.get(pkg);
-            }
-
-            if (!this.allMondoDependencies.includes(pkg)) {
-                return false;
-            }
-        }
-
-        return true;
+        return pkg;
     }
 }
 

@@ -5,50 +5,66 @@ const {Command} = require('switchit');
 const semver = require('semver');
 const chalk = require('chalk');
 const columnify = require('columnify');
+const jsonfile = require('jsonfile');
 const JSON5 = require('json5');
 const NPM = require('../pkgMgrs/Npm.js');
 const Repo = require('../Repo.js');
 const Collection = require('../utils/Collection.js');
+const isWindows = /^win/.test(process.platform);
 
 class Publish extends Command {
+    constructor() {
+        this.publisher = new NPM();
+    }
+
     execute(params) {
-        const {recursive, dry, write, 'check-existing': checkExisting} = params;
+        const {recursive, dry, script, 'check-existing': checkExisting} = params;
         const path = params.path ? Path.isAbsolute(params.path) ? params.path : Path.join(process.cwd(), params.path) : process.cwd();
         const repo = Repo.open(path);
 
         this._packages = new Collection();
-        this.dry = dry;
-        this.write = write;
 
-        // Get a list of all the this._revPackages we will be reving
-        for (let pkg of repo.packages) {
-            this._packages.add(pkg);
-            if (recursive) {
-                this._packages.addAll(pkg.allMondoDependencies);
+        this.hasPublishConflict = false;
+        this.dry = script ? false : dry;
+        this.script = script;
+        this.checkExisting = checkExisting;
+
+        // Get a list of all the packages we will be publishing
+        for (let pkg of (recursive ? repo.allPackages : repo.packages)) {
+            if (!pkg.private) {
+                this._packages.add(pkg);
             }
         }
 
         if (checkExisting) {
-            return this.checkExisting()
-                .then(this.log.bind(this))
-                .then(!dry ? write ? this.writeScript.bind(this) : this.publish.bind(this) : Promise.resolve());
+            return this.doCheckExisting()
+                .then(() => {
+                    if (this.dry || this.hasPublishConflict) {
+                        this.log();
+                    } else if (script) {
+                        this.writeScript();
+                    } else {
+                        this.log();
+                        return this.publish();
+                    }
+                });
         } else {
-            this.log();
-
-            if (!dry) {
+            if (script) {
+                this.writeScript();
+            } else {
+                this.log();
                 return this.publish();
             }
         }
     }
 
-    checkExisting() {
-        const npm = new NPM();
+    doCheckExisting() {
         return Promise.all(
             this._packages.map(pkg => {
                 // Run NPM view over the package to get registry data
-                return npm.view(pkg.name, pkg.version)
+                return this.publisher.view(pkg.name, pkg.version)
                     .then(results => {
-                        const registry = pkg.registry = !!results ? JSON5.parse(results) : false;
+                        const registry = pkg.$$registry = !!results ? JSON5.parse(results) : false;
 
                         // Check if the version we would like to rev to is already published for this package
                         if (registry) {
@@ -56,6 +72,18 @@ class Publish extends Command {
                         } else {
                             pkg.$$alreadyPublished = false;
                         }
+
+
+                        // Check if there is a fingerprint match for the package
+                        const mondo = registry.mondo || {};
+                        if (pkg.hash === mondo.hash) {
+                            pkg.$$hashMatch = true;
+                        }
+
+                        if (pkg.$$alreadyPublished && !pkg.$$hashMatch) {
+                            this.hasPublishConflict = true;
+                        }
+
                     }).catch(() => {
                         pkg.$$neverPublished = true;
                         //catch here though so the promise.all doesn't fail
@@ -69,9 +97,9 @@ class Publish extends Command {
         let statusRegExpResult, colorFunc;
 
         columns.map(column => {
-            if (column.$$alreadyPublished) {
+            if (column.$$alreadyPublished && !column.$$hashMatch) {
                 column.status = 'E';
-                column.details = `This version is already published to the NPM Registry`;
+                column.details = `This version is already published to the NPM Registry is locally modified`;
             } else if (column.$$alreadyPublished === false) {
                 column.details = `OK`;
             } else if (column.$$neverPublished) {
@@ -105,41 +133,46 @@ class Publish extends Command {
     }
 
     publish() {
-        let allowPublish = true;
+        // Shortcut to chain then's of promises from an array
+        return this._packages.reduce((promise, pkg) => {
+            return promise.then(() => {
+                const json = pkg.publishify();
+                const original = fs.readFileSync(pkg.file);
+                jsonfile.writeFileSync(pkg.file, json, {spaces: 4});
 
-        this._packages.forEach(pkg => {
-            if (pkg.$$alreadyPublished) {
-                console.log(`Publish Aborted, ${pkg.name} is already published at version ${pkg.version}`);
-                allowPublish = false;
-            }
-        });
+                return this.publisher.publish(pkg.path).then(r => {
+                    fs.writeFileSync(pkg.file, original);
+                    return r;
+                }).catch(err => {
+                    fs.writeFileSync(pkg.file, original);
+                    if (this.checkExisting || !err.message.includes('You cannot publish over the previously published version')) {
+                        throw err;
+                    } else {
+                        return this.publisher.view(pkg.name, pkg.version).then(results => {
+                            const registry = !!results ? JSON5.parse(results) : false;
 
-        if (allowPublish) {
-            const npm = new NPM();
-
-            // Shortcut to chain then's of promises from an array
-            return this._packages.reduce((promise, pkg) => {
-                return promise.then(() => {
-                    return npm.publish(pkg.path);
+                            const mondo = registry.mondo || {};
+                            if (pkg.hash !== mondo.hash) {
+                                throw new Error(`${pkg.name} at version ${pkg.version} is already published to NPM and has changed locally.`);
+                            }
+                            // No entry for this package in the NPM registry
+                        });
+                    }
                 });
-            }, Promise.resolve());
-        }
+            });
+        }, Promise.resolve());
     }
 
     writeScript() {
-        let scriptPath = this.write;
-        let commands = [];
-
-        // Shortcut to chain then's of promises from an array
+        const prefix = isWindows ? 'REM' : '#';
         this._packages.forEach(pkg => {
-            commands.push(`npm publish ${pkg.path}`);
+            if (!pkg.$$alreadyPublished) {
+                console.log(`npm publish ${pkg.path}`);
+            } else {
+                console.log(`${prefix} Version already exists for ${pkg.name}`);
+                console.log(`${prefix} npm publish ${pkg.path}`);
+            }
         });
-
-        if (!Path.isAbsolute(scriptPath)) {
-            scriptPath = Path.resolve(process.cwd(), scriptPath);
-        }
-
-        fs.writeFileSync(scriptPath, commands.join('\n'));
     }
 }
 
@@ -149,7 +182,7 @@ Publish.define({
     },
     parameters: '[path=]',
     switches: `[dry:boolean=false]
- [write:string=]
+ [script:boolean=false]
  [check-existing:boolean=true]
  [recursive:boolean=false]`
 });
